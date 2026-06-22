@@ -1,11 +1,11 @@
 name: Staging CI/CD
 
-# CI (lint + test) gates the deploy; the deploy step syncs code and caches only.
+# Deploy on push to staging. PRs trigger the workflow but the deploy job is
+# gated off (see `if:` below), so PRs never deploy.
 on:
   push:
     branches: [staging]
   pull_request:
-  
     branches: [staging]
   workflow_dispatch:
 
@@ -24,7 +24,7 @@ jobs:
     name: Deploy to OVH Staging
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
-    environment: staging-script
+    environment: staging
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -46,12 +46,12 @@ jobs:
             # ==========================
             if [ ! -d "$APP_PATH/.git" ]; then
               rm -rf $APP_PATH
-              git clone -b staging https://${{ secrets.PAT_TOKEN }}@github.com/rp-vespera/script-replica.git $APP_PATH
+              git clone -b staging https://${{ secrets.PAT }}@github.com/rp-vespera/scripting.git $APP_PATH
             fi
 
             cd $APP_PATH
 
-            git remote set-url origin https://${{ secrets.PAT_TOKEN }}@github.com/rp-vespera/script-replica.git || true
+            git remote set-url origin https://${{ secrets.PAT }}@github.com/rp-vespera/scripting.git || true
 
             # ==========================
             # SAFE GIT SYNC
@@ -85,13 +85,26 @@ jobs:
 
             export APP_URL="${{ secrets.APP_URL }}"
 
+            grep -q "^APP_ENV=" .env \
+              && sed -i "s|^APP_ENV=.*|APP_ENV=staging|" .env \
+              || echo "APP_ENV=staging" >> .env
+
+            grep -q "^APP_DEBUG=" .env \
+              && sed -i "s|^APP_DEBUG=.*|APP_DEBUG=false|" .env \
+              || echo "APP_DEBUG=false" >> .env
+
+            grep -q "^APP_URL=" .env \
+              && sed -i "s|^APP_URL=.*|APP_URL=${APP_URL}|" .env \
+              || echo "APP_URL=${APP_URL}" >> .env
+
             # ==========================
-            # DATABASE EXPORTS
+            # DATABASE (MySQL) CONFIG
             # ==========================
+            echo "Writing database config..."
 
             # DB1 — primary (DVC)
             export DB_HOST="${{ secrets.APP_HOST }}"
-            export DB_PORT="${{ secrets.APP_PORT }}"
+            export DB_PORT="${{ secrets.APP_PORT }}"          # APP_PORT var holds 3306
             export DB_DATABASE="${{ secrets.DVC_DB_NAME }}"
             export DB_USERNAME="${{ secrets.DVC_DB_USERNAME }}"
             export DB_PASSWORD="${{ secrets.DVC_DB_PASSWORD }}"
@@ -103,23 +116,7 @@ jobs:
             export DB2_USERNAME="${{ secrets.SAS_DB_USERNAME }}"
             export DB2_PASSWORD="${{ secrets.SAS_DB_PASSWORD }}"
 
-            # DB3 — tertiary (SAS SAERPP4)
-            export DB3_HOST="${{ secrets.SAS_DB_HOST }}"
-            export DB3_PORT="${{ secrets.SAS_DB_PORT }}"
-            export DB3_DATABASE="${{ secrets.SAS_DB_SAERPP4_NAME }}"
-            export DB3_USERNAME="${{ secrets.SAS_DB_USERNAME }}"
-            export DB3_PASSWORD="${{ secrets.SAS_DB_PASSWORD }}"
-
-            # DB4 — quaternary (TAPS)
-            export DB4_HOST="${{ secrets.TAPS_DB_HOST }}"
-            export DB4_PORT="${{ secrets.TAPS_DB_PORT }}"
-            export DB4_DATABASE="${{ secrets.TAPS_DB_NAME }}"
-            export DB4_USERNAME="${{ secrets.TAPS_DB_USERNAME }}"
-            export DB4_PASSWORD="${{ secrets.TAPS_DB_PASSWORD }}"
-
-            echo "Writing database config..."
-
-            # Primary DB
+            # DB1
             grep -q "^DB_CONNECTION=" .env \
               && sed -i "s|^DB_CONNECTION=.*|DB_CONNECTION=mysql|" .env \
               || echo "DB_CONNECTION=mysql" >> .env
@@ -144,7 +141,7 @@ jobs:
               && sed -i "s|^DB_PASSWORD=.*|DB_PASSWORD=\"${DB_PASSWORD}\"|" .env \
               || echo "DB_PASSWORD=\"${DB_PASSWORD}\"" >> .env
 
-            # Secondary DB
+            # DB2
             grep -q "^DB2_HOST=" .env \
               && sed -i "s|^DB2_HOST=.*|DB2_HOST=${DB2_HOST}|" .env \
               || echo "DB2_HOST=${DB2_HOST}" >> .env
@@ -165,56 +162,10 @@ jobs:
               && sed -i "s|^DB2_PASSWORD=.*|DB2_PASSWORD=\"${DB2_PASSWORD}\"|" .env \
               || echo "DB2_PASSWORD=\"${DB2_PASSWORD}\"" >> .env
 
-            # Tertiary DB
-            grep -q "^DB3_HOST=" .env \
-              && sed -i "s|^DB3_HOST=.*|DB3_HOST=${DB3_HOST}|" .env \
-              || echo "DB3_HOST=${DB3_HOST}" >> .env
-
-            grep -q "^DB3_PORT=" .env \
-              && sed -i "s|^DB3_PORT=.*|DB3_PORT=${DB3_PORT}|" .env \
-              || echo "DB3_PORT=${DB3_PORT}" >> .env
-
-            grep -q "^DB3_DATABASE=" .env \
-              && sed -i "s|^DB3_DATABASE=.*|DB3_DATABASE=${DB3_DATABASE}|" .env \
-              || echo "DB3_DATABASE=${DB3_DATABASE}" >> .env
-
-            grep -q "^DB3_USERNAME=" .env \
-              && sed -i "s|^DB3_USERNAME=.*|DB3_USERNAME=${DB3_USERNAME}|" .env \
-              || echo "DB3_USERNAME=${DB3_USERNAME}" >> .env
-
-            grep -q "^DB3_PASSWORD=" .env \
-              && sed -i "s|^DB3_PASSWORD=.*|DB3_PASSWORD=\"${DB3_PASSWORD}\"|" .env \
-              || echo "DB3_PASSWORD=\"${DB3_PASSWORD}\"" >> .env
-
-            # Quaternary DB
-            grep -q "^DB4_HOST=" .env \
-              && sed -i "s|^DB4_HOST=.*|DB4_HOST=${DB4_HOST}|" .env \
-              || echo "DB4_HOST=${DB4_HOST}" >> .env
-
-            grep -q "^DB4_PORT=" .env \
-              && sed -i "s|^DB4_PORT=.*|DB4_PORT=${DB4_PORT}|" .env \
-              || echo "DB4_PORT=${DB4_PORT}" >> .env
-
-            grep -q "^DB4_DATABASE=" .env \
-              && sed -i "s|^DB4_DATABASE=.*|DB4_DATABASE=${DB4_DATABASE}|" .env \
-              || echo "DB4_DATABASE=${DB4_DATABASE}" >> .env
-
-            grep -q "^DB4_USERNAME=" .env \
-              && sed -i "s|^DB4_USERNAME=.*|DB4_USERNAME=${DB4_USERNAME}|" .env \
-              || echo "DB4_USERNAME=${DB4_USERNAME}" >> .env
-
-            grep -q "^DB4_PASSWORD=" .env \
-              && sed -i "s|^DB4_PASSWORD=.*|DB4_PASSWORD=\"${DB4_PASSWORD}\"|" .env \
-              || echo "DB4_PASSWORD=\"${DB4_PASSWORD}\"" >> .env
-              
             # ==========================
             # APP KEY
             # ==========================
             echo "Ensuring APP_KEY exists..."
-            # key:generate only REPLACES an existing APP_KEY= line; on a fresh
-            # .env there is nothing to replace and it silently writes nothing.
-            # Seed an empty placeholder first so the key is actually persisted.
-            grep -q "^APP_KEY=" .env || echo "APP_KEY=" >> .env
             if ! grep -q "^APP_KEY=base64:" .env; then
               php artisan key:generate --force
             fi
