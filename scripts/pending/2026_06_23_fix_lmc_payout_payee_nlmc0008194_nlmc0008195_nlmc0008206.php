@@ -147,7 +147,7 @@ return function ($cmd) {
                     ->update([
                         'bpar_i_person_id' => $newBparPersonId,
                         's_bpartner_id'    => $newBpartnerId,
-                        'updated'          => 'Data Correction',
+                        'updated'          => 'Script by Web',
                         'date_updated'     => now(),
                     ]);
                 echo "  wip_t_lmc_payout updated : {$rows} row\n";
@@ -159,7 +159,7 @@ return function ($cmd) {
                     ->update([
                         'bpar_i_person_id' => $newBparPersonId,
                         's_bpartner_id'    => $newBpartnerId,
-                        'updated'          => 'Data Correction',
+                        'updated'          => 'Script by Web',
                         'date_updated'     => now(),
                     ]);
                 $rows += $debtRows;
